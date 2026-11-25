@@ -1,0 +1,13 @@
+{
+  "name": "claude-m3-context",
+  "description": "A Material 3 Expressive context meter for Claude Code.",
+  "owner": {
+    "name": "LinusAuditore"
+  },
+  "plugins": [
+    {
+      "name": "m3-context",
+      "source": "./"
+    }
+  ]
+}
