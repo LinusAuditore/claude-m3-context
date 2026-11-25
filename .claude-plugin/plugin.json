@@ -1,6 +1,6 @@
 {
   "name": "m3-context",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Material 3 Expressive context meter above the prompt: a wavy progress track, a morphing cookie-shaped percent badge, an auto-compact marker and rate-limit rings.",
   "author": { "name": "LinusAuditore" },
   "license": "MIT",

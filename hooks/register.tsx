@@ -170,6 +170,49 @@ const ring = (limit: Limit, x: number): string => {
 </g>`
 }
 
+// The indeterminate sweep while a turn runs, after M3's: two segments whose
+// tail and head run along the track at different speeds, so each one grows,
+// then shrinks. Rows are [time, tail, head], as fractions of the cycle and of
+// the track.
+type Sweep = readonly (readonly [number, number, number])[]
+
+const SWEEP_A: Sweep = [
+  [0, 0, 0],
+  [0.15, 0, 0.2],
+  [0.5, 0.25, 0.85],
+  [0.7, 0.75, 1],
+  [0.75, 1, 1],
+  [1, 1, 1],
+]
+
+const SWEEP_B: Sweep = [
+  [0, 0, 0],
+  [0.55, 0, 0],
+  [0.75, 0, 0.35],
+  [0.95, 0.6, 1],
+  [1, 1, 1],
+]
+
+const SWEEP_SECONDS = 2
+
+// A segment's rect at each step of its sweep, `pad` wider on either side.
+const sweepKeyframes = (
+  name: string,
+  sweep: Sweep,
+  x0: number,
+  trackW: number,
+  pad: number,
+): string => {
+  const frames = sweep.map(([at, tail, head]) => {
+    const x = x0 + tail * trackW - pad
+    const width = head - tail > 0.001 ? (head - tail) * trackW + pad * 2 : 0
+
+    return `${(at * 100).toFixed(1)}% { x: ${x.toFixed(1)}px; width: ${width.toFixed(1)}px; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }`
+  })
+
+  return `@keyframes ${name} { ${frames.join(' ')} }`
+}
+
 const scene = (u: Usage, shown: readonly Limit[], isWorking: boolean, W: number): string => {
   const tone = toneOf(u.percent)
   const ringsRoom = shown.length > 0 ? shown.length * RING_ITEM + 8 : 0
@@ -179,17 +222,22 @@ const scene = (u: Usage, shown: readonly Limit[], isWorking: boolean, W: number)
   const end = X0 + trackW * fraction
   const hasActive = u.percent !== undefined && end > X0 + 2
 
-  // A long wave, always drifting by one wavelength (faster while a turn runs);
-  // the clip keeps its visible part between the track's start and the fill's end.
+  // A wave the length of the track, always drifting by one wavelength (faster
+  // while a turn runs); two clip rects show the parts of it that are filled:
+  // at rest the first holds the fill, while a turn runs both sweep.
   const waveStart = X0 - WAVE * 2
-  const segments = Math.ceil((end - waveStart + WAVE * 2) / (WAVE / 2))
+  const segments = Math.ceil((XT - waveStart + WAVE * 2) / (WAVE / 2))
   const wave =
     `M ${waveStart} ${TRACK_Y} q ${WAVE / 4} ${-AMP} ${WAVE / 2} 0` +
     ' t ' +
     Array.from({ length: segments }, () => `${WAVE / 2} 0`).join(' t ')
 
-  const restStart = hasActive ? end + GAP : X0
-  const hasRest = restStart < XT - 2
+  // At rest (and with reduced motion) the rects hold the determinate fill;
+  // the sweep's keyframes take over while a turn runs.
+  const fillX = X0 - 2
+  const fillW = hasActive ? end - X0 + 4 : 0
+  const gapX = X0 - GAP
+  const gapW = hasActive ? end - X0 + GAP * 2 : 0
 
   const compactFraction = u.compactAt === undefined ? undefined : u.compactAt / u.window
   const compactX =
@@ -211,7 +259,7 @@ const scene = (u: Usage, shown: readonly Limit[], isWorking: boolean, W: number)
           ? 'Context filling up'
           : 'Context'
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet">
+  return `<svg xmlns="http://www.w3.org/2000/svg"${isWorking ? ' class="busy"' : ''} width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMid meet">
 <style>
 svg { ${vars('light')}; font-family: 'Google Sans Flex', 'Google Sans', 'Roboto Flex', Roboto, system-ui, sans-serif; }
 @media (prefers-color-scheme: dark) { svg { ${vars('dark')}; } }
@@ -229,6 +277,11 @@ ${toneRules}
 .busy .wave { animation-duration: 1.1s; }
 .rest { stroke: var(--track); stroke-width: 4; stroke-linecap: round; }
 .stop { fill: var(--accent); }
+.busy .stop { display: none; }
+.busy .seg-a { animation: sweep-a ${SWEEP_SECONDS}s infinite; }
+.busy .seg-b { animation: sweep-b ${SWEEP_SECONDS}s infinite; }
+.busy .gap-a { animation: gap-a ${SWEEP_SECONDS}s infinite; }
+.busy .gap-b { animation: gap-b ${SWEEP_SECONDS}s infinite; }
 .tick { fill: var(--on-variant); opacity: 0.7; }
 .tick-label { fill: var(--on-variant); font-size: 10px; font-weight: 500; opacity: 0.85; }
 .ring { fill: none; stroke: var(--track); stroke-width: 4; }
@@ -238,17 +291,24 @@ ${toneRules}
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes flow { to { transform: translateX(${WAVE}px); } }
 ${MORPH_KEYFRAMES}
-@media (prefers-reduced-motion: reduce) { .spin, .badge, .wave { animation: none; } }
+${sweepKeyframes('sweep-a', SWEEP_A, X0, trackW, 2)}
+${sweepKeyframes('sweep-b', SWEEP_B, X0, trackW, 2)}
+${sweepKeyframes('gap-a', SWEEP_A, X0, trackW, GAP)}
+${sweepKeyframes('gap-b', SWEEP_B, X0, trackW, GAP)}
+@media (prefers-reduced-motion: reduce) { .spin, .badge, .wave, .seg-a, .seg-b, .gap-a, .gap-b { animation: none; } .busy .stop { display: inline; } }
 </style>
-<defs><clipPath id="fill"><rect x="${X0 - 2}" y="${TRACK_Y - 6}" width="${Math.max(0, end - X0 + 4).toFixed(1)}" height="12" rx="6"/></clipPath></defs>
-<g class="tone-${tone}${isWorking ? ' busy' : ''}">
+<defs>
+<clipPath id="fill"><rect class="seg-a" x="${fillX}" y="${TRACK_Y - 6}" width="${fillW.toFixed(1)}" height="12" rx="6"/><rect class="seg-b" x="${fillX}" y="${TRACK_Y - 6}" width="0" height="12" rx="6"/></clipPath>
+<mask id="gaps" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect x="0" y="0" width="${W}" height="${H}" fill="white"/><rect class="gap-a" x="${gapX}" y="${TRACK_Y - 8}" width="${gapW.toFixed(1)}" height="16" fill="black"/><rect class="gap-b" x="${gapX}" y="${TRACK_Y - 8}" width="0" height="16" fill="black"/></mask>
+</defs>
+<g class="tone-${tone}">
 <rect class="card" x="0" y="4" width="${W}" height="${H - 8}" rx="${(H - 8) / 2}"/>
 <g class="spin"><path class="badge" d="${COOKIE}"/></g>
 ${badge}
 <text x="${X0}" y="30" class="label">${status}</text>
 <text x="${XT}" y="30" text-anchor="end" class="fig">${figure(u)}</text>
-${hasActive ? `<g clip-path="url(#fill)"><path class="wave" d="${wave}"/></g>` : ''}
-${hasRest ? `<line class="rest" x1="${restStart.toFixed(1)}" y1="${TRACK_Y}" x2="${XT}" y2="${TRACK_Y}"/>` : ''}
+<g clip-path="url(#fill)"><path class="wave" d="${wave}"/></g>
+<line class="rest" mask="url(#gaps)" x1="${X0}" y1="${TRACK_Y}" x2="${XT}" y2="${TRACK_Y}"/>
 ${fraction < 0.97 ? `<circle class="stop" cx="${XT}" cy="${TRACK_Y}" r="2"/>` : ''}
 ${compactX === undefined ? '' : `<rect class="tick" x="${(compactX - 1.5).toFixed(1)}" y="${TRACK_Y - 8}" width="3" height="16" rx="1.5"/><text x="${compactX.toFixed(1)}" y="${H - 7}" text-anchor="middle" class="tick-label">Auto-compact</text>`}
 </g>

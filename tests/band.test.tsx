@@ -49,7 +49,10 @@ test('the meter fills the band, marks auto-compact and shows the limits', async 
   // 120 columns at 8.4px each.
   expect(svg?.props.width).toBe(1008)
   expect(source).toContain('viewBox="0 0 1008 72"')
-  expect(source).toContain('busy')
+  expect(source).toContain('<svg xmlns="http://www.w3.org/2000/svg" class="busy"')
+  // While a turn runs the fill gives way to the indeterminate sweep.
+  expect(source).toContain('@keyframes sweep-a')
+  expect(source).toContain('.busy .seg-b { animation: sweep-b 2s infinite; }')
   expect(source).toContain('Auto-compact')
   expect(source).toContain('>5h<')
   expect(source).toContain('>7d<')
