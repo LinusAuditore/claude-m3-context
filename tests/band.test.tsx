@@ -61,7 +61,7 @@ test('the meter fills the band, marks auto-compact and shows the limits', async 
   await ui.unmount()
 })
 
-test('a nearly full window turns red and offers to compact, on the terminal', async ($, on) => {
+test('a nearly full window turns red and offers no compact button, on the terminal', async ($, on) => {
   on('session.measure', () => ({ changed: ['context'] }))
 
   await $.session.measure({
@@ -72,6 +72,7 @@ test('a nearly full window turns red and offers to compact, on the terminal', as
 
   const ui = await $.ui.mount(band('terminal'))
   expect((await ui.find({ type: 'Text', text: /90%/ }))?.text).toBe('90%')
-  expect((await ui.find({ type: 'Button' }))?.props.label).toBe('Compact now')
+  // A button would outlive a compaction until the next reply's figures arrive.
+  expect(await ui.find({ type: 'Button' })).toBe(undefined)
   await ui.unmount()
 })

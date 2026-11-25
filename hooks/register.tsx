@@ -11,7 +11,6 @@ type Tone = 'primary' | 'tertiary' | 'error'
 // Where a meter changes its color role: calm, getting full, nearly out.
 const WARN_AT = 60
 const ALERT_AT = 85
-const COMPACT_AT = 80
 
 const toneOf = (percent: number | undefined): Tone =>
   percent === undefined || percent < WARN_AT
@@ -104,7 +103,6 @@ const MAX_W = 3200
 // On desktop `bodyColumns` is the slot's width over the code font's advance:
 // this is that advance, so columns times it is the slot in pixels.
 const ADVANCE = 8.4
-const BUTTON_ROOM = 132
 
 // Every shape is one closed polygon of the same number of points around the
 // badge's centre, so CSS can morph `d` from any shape to any other.
@@ -405,20 +403,7 @@ export const register: Register = on => {
     }
 
     const shown = (await read($, limits)).slice(0, 3)
-    const ui = $.ui.resolve(e)
     const tone = toneOf(u.percent)
-    const canCompact = (u.percent ?? 0) >= COMPACT_AT && !e.props.isWorking
-    const compact = (Button: (typeof ui)['Button']) =>
-      canCompact ? (
-        <Button
-          key="compact"
-          label="Compact now"
-          variant={tone === 'error' ? 'primary' : 'secondary'}
-          onPress={async () => {
-            await $.session.compact()
-          }}
-        />
-      ) : null
 
     if (e.surface === 'terminal') {
       const { Box, Progress, Text } = $.ui.resolve(e)
@@ -441,13 +426,12 @@ export const register: Register = on => {
               {limitName(l.kind)} {Math.round(l.percentUsed)}%
             </Text>
           ))}
-          {compact(ui.Button)}
         </Box>
       )
     }
 
-    const { Box, Svg } = $.ui.resolve(e)
-    const slot = Math.round(e.props.bodyColumns * ADVANCE) - (canCompact ? BUTTON_ROOM : 0)
+    const { Svg } = $.ui.resolve(e)
+    const slot = Math.round(e.props.bodyColumns * ADVANCE)
     const W = Math.min(MAX_W, Math.max(MIN_W, slot))
     const compactNote =
       u.compactAt === undefined ? '' : `, auto-compacts at ${formatTokens(u.compactAt)}`
@@ -461,11 +445,6 @@ export const register: Register = on => {
       compactNote +
       (limitNote === '' ? '' : `; ${limitNote}`)
 
-    return (
-      <Box flexDirection="row" alignItems="center" gap={1}>
-        <Svg source={scene(u, shown, e.props.isWorking, W)} alt={alt} width={W} height={H} />
-        {compact(ui.Button)}
-      </Box>
-    )
+    return <Svg source={scene(u, shown, e.props.isWorking, W)} alt={alt} width={W} height={H} />
   })
 }

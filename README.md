@@ -7,7 +7,6 @@ A Claude Code mod that puts a **Material 3 Expressive** context meter in the ban
 - **Tonal color roles** from the M3 baseline palette: primary below 60%, tertiary from 60%, error from 85%. Light and dark follow the app.
 - **Auto-compact marker** on the track, where auto-compaction will run.
 - **Rate-limit rings** for each window your account reports (5h, 7d, spend limit).
-- **Compact now** button once the context passes 80% and Claude is idle.
 - Respects *reduce motion*. The terminal gets a text and progress-bar version.
 
 ## Install
