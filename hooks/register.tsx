@@ -168,44 +168,43 @@ const ring = (limit: Limit, x: number): string => {
 </g>`
 }
 
-// The indeterminate sweep while a turn runs, after M3's: two segments whose
-// tail and head run along the track at different speeds, so each one grows,
-// then shrinks. Rows are [time, tail, head], as fractions of the cycle and of
-// the track.
-type Sweep = readonly (readonly [number, number, number])[]
+// The indeterminate sweep while a turn runs, after M3's: a segment whose head
+// and tail each make one smooth trip along the track, the tail starting later
+// and finishing later, so the segment grows, then shrinks, without pausing.
+// A second segment runs the same trip half a cycle later, so one is always
+// on the track. Times are fractions of the cycle; positions of the track.
+const HEAD_TRIP = [0, 0.62] as const
+const TAIL_TRIP = [0.16, 0.8] as const
+const SECOND_SEGMENT_PHASE = 0.5
+const SWEEP_SECONDS = 2.4
+// Keyframes per cycle; motion between them is linear, so the curve is smooth.
+const SWEEP_STEPS = 60
 
-const SWEEP_A: Sweep = [
-  [0, 0, 0],
-  [0.15, 0, 0.2],
-  [0.5, 0.25, 0.85],
-  [0.7, 0.75, 1],
-  [0.75, 1, 1],
-  [1, 1, 1],
-]
+const ease = (x: number): number => (1 - Math.cos(Math.PI * Math.min(1, Math.max(0, x)))) / 2
+const along = ([from, to]: readonly [number, number], at: number): number =>
+  ease((at - from) / (to - from))
 
-const SWEEP_B: Sweep = [
-  [0, 0, 0],
-  [0.55, 0, 0],
-  [0.75, 0, 0.35],
-  [0.95, 0.6, 1],
-  [1, 1, 1],
-]
-
-const SWEEP_SECONDS = 2
-
-// A segment's rect at each step of its sweep, `pad` wider on either side.
+// A segment's rect at each step of its trip, up to `pad` wider on either side:
+// the pad shrinks with the segment, so it comes and goes from nothing.
 const sweepKeyframes = (
   name: string,
-  sweep: Sweep,
+  phase: number,
   x0: number,
   trackW: number,
   pad: number,
 ): string => {
-  const frames = sweep.map(([at, tail, head]) => {
-    const x = x0 + tail * trackW - pad
-    const width = head - tail > 0.001 ? (head - tail) * trackW + pad * 2 : 0
+  const frames = Array.from({ length: SWEEP_STEPS + 1 }, (_, i) => {
+    const t = i / SWEEP_STEPS
+    const local = (((t - phase) % 1) + 1) % 1
+    // The cycle's last frame closes the loop at the same place as its first.
+    const at = i === SWEEP_STEPS && phase === 0 ? 1 : local
+    const head = along(HEAD_TRIP, at)
+    const tail = along(TAIL_TRIP, at)
+    const length = Math.max(0, head - tail) * trackW
+    const grow = pad * Math.min(1, length / (pad * 2))
+    const x = x0 + tail * trackW - grow
 
-    return `${(at * 100).toFixed(1)}% { x: ${x.toFixed(1)}px; width: ${width.toFixed(1)}px; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }`
+    return `${(t * 100).toFixed(2)}% { x: ${x.toFixed(1)}px; width: ${(length + grow * 2).toFixed(1)}px; }`
   })
 
   return `@keyframes ${name} { ${frames.join(' ')} }`
@@ -276,10 +275,10 @@ ${toneRules}
 .rest { stroke: var(--track); stroke-width: 4; stroke-linecap: round; }
 .stop { fill: var(--accent); }
 .busy .stop { display: none; }
-.busy .seg-a { animation: sweep-a ${SWEEP_SECONDS}s infinite; }
-.busy .seg-b { animation: sweep-b ${SWEEP_SECONDS}s infinite; }
-.busy .gap-a { animation: gap-a ${SWEEP_SECONDS}s infinite; }
-.busy .gap-b { animation: gap-b ${SWEEP_SECONDS}s infinite; }
+.busy .seg-a { animation: sweep-a ${SWEEP_SECONDS}s linear infinite; }
+.busy .seg-b { animation: sweep-b ${SWEEP_SECONDS}s linear infinite; }
+.busy .gap-a { animation: gap-a ${SWEEP_SECONDS}s linear infinite; }
+.busy .gap-b { animation: gap-b ${SWEEP_SECONDS}s linear infinite; }
 .tick { fill: var(--on-variant); opacity: 0.7; }
 .tick-label { fill: var(--on-variant); font-size: 10px; font-weight: 500; opacity: 0.85; }
 .ring { fill: none; stroke: var(--track); stroke-width: 4; }
@@ -289,10 +288,10 @@ ${toneRules}
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes flow { to { transform: translateX(${WAVE}px); } }
 ${MORPH_KEYFRAMES}
-${sweepKeyframes('sweep-a', SWEEP_A, X0, trackW, 2)}
-${sweepKeyframes('sweep-b', SWEEP_B, X0, trackW, 2)}
-${sweepKeyframes('gap-a', SWEEP_A, X0, trackW, GAP)}
-${sweepKeyframes('gap-b', SWEEP_B, X0, trackW, GAP)}
+${sweepKeyframes('sweep-a', 0, X0, trackW, 2)}
+${sweepKeyframes('sweep-b', SECOND_SEGMENT_PHASE, X0, trackW, 2)}
+${sweepKeyframes('gap-a', 0, X0, trackW, GAP)}
+${sweepKeyframes('gap-b', SECOND_SEGMENT_PHASE, X0, trackW, GAP)}
 @media (prefers-reduced-motion: reduce) { .spin, .badge, .wave, .seg-a, .seg-b, .gap-a, .gap-b { animation: none; } .busy .stop { display: inline; } }
 </style>
 <defs>
